@@ -25,7 +25,6 @@ ordered_vars = [
     "GenJet_closestMuon_dr",
     "GenJet_closestMuon_pt",
     "GenJet_closestGVTau_pt",
-    "GenJet_Pileup_nPU",
     "GenJet_SV_mass",
     "FakeJet_pt",
     "GenJetAK8_pt",
@@ -39,7 +38,6 @@ ordered_vars = [
     "Muon_genMuonPt",
     "Muon_FSRPt",
     "GenMET_pt",
-    "Pileup_nPU",
     "GenHT",
     "JetHT",
     "Recoil_pt",
@@ -48,7 +46,6 @@ ordered_vars = [
     "GenMuon_ClosestGenJet_DeltaR",
     "GenMuon_ClosestGenJet_pt",
     "GenMuon_ClosestGenJet_mass",
-    "GenMuon_Pileup_nPU",
     "Jet_pt",
     "Jet_mass",
     "Jet_GenMuonDr",
@@ -64,7 +61,6 @@ ordered_vars = [
     "GenElectron_ClosestGenJet_mass",
     "GenPromptPhoton_ClosestGenJet_pt",
     "GenPromptPhoton_ClosestGenJet_mass",
-    "PileUpSV_nPU",
     "GenJet_pt",
     "SubGenJetAK8_pt",
     "SubGenJetAK8_mass",
@@ -101,7 +97,6 @@ providers = [
     "jets",                            # GenJet_closestMuon_dr
     "jets",                            # GenJet_closestMuon_pt
     "jets",                            # GenJet_closestGVTau_pt
-    "jets",                            # GenJet_Pileup_nPU
     "jets",                            # GenJet_SV_mass
     "fake_jets_features",              # FakeJet_pt
     "fat_jets",                        # GenJetAK8_pt
@@ -115,7 +110,6 @@ providers = [
     "fsr_photons_from_muons",          # Muon_genMuonPt
     "fsr_photons_from_muons",          # Muon_FSRPt
     "met",                             # GenMET_pt
-    "met",                             # Pileup_nPU
     "met",                             # GenHT
     "met",                             # JetHT
     "met",                             # Recoil_pt
@@ -124,7 +118,6 @@ providers = [
     "muons",                           # GenMuon_ClosestGenJet_DeltaR
     "muons",                           # GenMuon_ClosestGenJet_pt
     "muons",                           # GenMuon_ClosestGenJet_mass
-    "muons",                           # GenMuon_Pileup_nPU
     "muons_from_jets",                 # Jet_pt
     "muons_from_jets",                 # Jet_mass
     "muons_from_jets",                 # Jet_GenMuonDr
@@ -140,7 +133,6 @@ providers = [
     "photon_from_geneles",             # GenElectron_ClosestGenJet_mass
     "photon_from_genpromptphotons",    # GenPromptPhoton_ClosestGenJet_pt
     "photon_from_genpromptphotons",    # GenPromptPhoton_ClosestGenJet_mass
-    "sv_from_pu",                      # PileUpSV_nPU
     "sv_from_genjets",                 # GenJet_pt (again)
     "sub_jets",                        # SubGenJetAK8_pt
     "sub_jets",                        # SubGenJetAK8_mass
@@ -201,8 +193,6 @@ dr_vars = {
     "GenMuon_ClosestGenJet_DeltaR", "Jet_GenMuonDr", "MatchedJet_ClosestGenVisTau_DeltaR"
 }
 
-pu_vars = {"GenJet_Pileup_nPU", "Pileup_nPU", "GenMuon_Pileup_nPU", "PileUpSV_nPU"}
-
 def count_range(arr, cond):
     return np.sum(cond(arr))
 
@@ -227,12 +217,6 @@ for i, var in enumerate(ordered_vars):
         ranges = [
             ("<0.4", lambda x: x < 0.4),
             ("≥0.4", lambda x: x >= 0.4)
-        ]
-    elif var in pu_vars:
-        ranges = [
-            ("0-40", lambda x: (x >= 0) & (x <= 40)),
-            ("41-60", lambda x: (x > 40) & (x <= 60)),
-            (">60", lambda x: x > 60)
         ]
     else:
         ranges = []
