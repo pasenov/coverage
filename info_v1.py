@@ -220,7 +220,7 @@ for i, var in enumerate(ordered_vars):
     if var in pt_mass_vars:
         ranges = [
             ("0-100",  lambda x: (x >= 0) & (x <= 100)),
-            ("101-1000", lambda x: (x > 100) & (x <= 1000)),
+            ("100-1000", lambda x: (x > 100) & (x <= 1000)),
             (">1000", lambda x: x > 1000)
         ]
     elif var in sv_vars:
@@ -234,9 +234,9 @@ for i, var in enumerate(ordered_vars):
         ]
     elif var in fake_jet_pt_vars:
         ranges = [
-            ("0-20",  lambda x: (x >= 0) & (x <= 20)),
-            ("20-100", lambda x: (x > 20) & (x <= 100)),
-            (">100", lambda x: x > 100)
+            ("0-100",  lambda x: (x >= 0) & (x <= 100)),
+            ("100-1000", lambda x: (x > 100) & (x <= 1000)),
+            (">1000", lambda x: x > 1000)
         ]
     elif var in ClosestGenVisTau_mass_vars:
         ranges = [
