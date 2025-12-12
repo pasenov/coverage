@@ -174,7 +174,7 @@ pt_mass_vars = {
     "GenElectron_ClosestGenJet_pt", "GenElectron_ClosestGenJet_mass",
     "GenPromptPhoton_ClosestGenJet_pt", "GenPromptPhoton_ClosestGenJet_mass",
     "GenJet_pt", "GenJet_mass", "GenJet_closestGVTau_pt",
-    "GenJet_SV_mass", "FakeJet_pt", "GenJetAK8_pt", "GenJetAK8_mass",
+    "GenJetAK8_pt", "GenJetAK8_mass",
     "GenJetAK8_SubGenJetAK8_pt1", "GenJetAK8_SubGenJetAK8_pt2",
     "GenJetAK8_SubGenJetAK8_mass1", "GenJetAK8_SubGenJetAK8_mass2",
     "Muon_pt", "Muon_mass", "Muon_genMuonPt", "Muon_FSRPt",
@@ -182,9 +182,19 @@ pt_mass_vars = {
     "Ref_pt", "GenMuon_pt", "GenMuon_ClosestGenJet_pt", "GenMuon_ClosestGenJet_mass",
     "SubGenJetAK8_pt", "SubGenJetAK8_mass", "SubGenJetAK8_ReconstructedFatJet_pt",
     "SubGenJetAK8_ReconstructedFatJet_mass", "MatchedJet_pt", "MatchedJet_mass",
-    "MatchedJet_SV_mass", "MatchedJet_ClosestGenVisTau_mass",
-    "MatchedJet_ClosestGenVisTau_pt", "UnmatchedJet_pt", "UnmatchedJet_mass",
-    "UnmatchedJet_SV_mass"
+    "MatchedJet_ClosestGenVisTau_pt", "UnmatchedJet_pt", "UnmatchedJet_mass"
+}
+
+sv_vars = {
+    "GenJet_SV_mass", "MatchedJet_SV_mass", "UnmatchedJet_SV_mass"
+}
+
+fake_jet_pt_vars = {
+    "FakeJet_pt"
+}
+
+ClosestGenVisTau_mass_vars = {
+    "MatchedJet_ClosestGenVisTau_mass"
 }
 
 dr_vars = {
@@ -212,6 +222,28 @@ for i, var in enumerate(ordered_vars):
             ("0-100",  lambda x: (x >= 0) & (x <= 100)),
             ("101-1000", lambda x: (x > 100) & (x <= 1000)),
             (">1000", lambda x: x > 1000)
+        ]
+    elif var in sv_vars:
+        ranges = [
+            ("0-1",  lambda x: (x >= 0) & (x <= 1)), # Light flavor-ish
+            ("1-2", lambda x: (x > 1) & (x <= 2)), # Charm-ish
+            ("2-4", lambda x: (x > 2) & (x <= 4)), # Bottom-ish (peak)
+            ("4-6", lambda x: (x > 4) & (x <= 6)), # Bottom-ish (tail)
+            ("6-10", lambda x: (x > 6) & (x <= 10)), # Mostly unknown
+            (">10", lambda x: x > 10) # Mythological
+        ]
+    elif var in fake_jet_pt_vars:
+        ranges = [
+            ("0-20",  lambda x: (x >= 0) & (x <= 20)),
+            ("20-100", lambda x: (x > 20) & (x <= 100)),
+            (">100", lambda x: x > 100)
+        ]
+    elif var in ClosestGenVisTau_mass_vars:
+        ranges = [
+            ("<1.2",  lambda x: x <= 1.2), # 1-prong decays
+            ("1.2-2", lambda x: (x > 1.2) & (x <= 2)), # pi0s
+            ("2-5", lambda x: (x > 2) & (x <= 5)), # Multi-prong visible decays
+            (">5", lambda x: x > 5)
         ]
     elif var in dr_vars:
         ranges = [
