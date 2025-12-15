@@ -163,7 +163,7 @@ for name in unique_providers:
         var2col = {v: i for i, v in enumerate(all_vars)}
         n_events = dat.shape[0] if getattr(dat, "ndim", 0) > 0 else 0
         scale = 1e6 / n_events if n_events > 0 else 0.0
-        models[name] = {"path": p, "config": cfg, "data": dat, "var2col": var2col, "scale": scale}
+        models[name] = {"path": p, "config": cfg, "data": dat, "var2col": var2col, "scale": scale, "n_events": n_events}
     else:
         # mark as not available
         models[name] = None
@@ -294,7 +294,15 @@ for i, var in enumerate(ordered_vars):
 
     print()
 
+# Compute total events (take the maximum n_events across available provider files)
+total_events = max((m.get("n_events", 0) for m in models.values() if m), default=0)
+
+# Convert to millions and format (trim trailing zeros)
+n_m = total_events / 1e6 if total_events > 0 else 0.0
+n_m_str = f"{n_m:.2f}".rstrip('0').rstrip('.')
+
 print("\nResults (to be pasted on the spreadsheet):\n")
+print(n_m_str)
 for line in spreadsheet_output:
     print(line)
 
