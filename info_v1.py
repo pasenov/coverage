@@ -6,6 +6,52 @@ import os
 
 parent_folder = sys.argv[1]
 
+# Get n_events ONCE from an event_counts.json in any provider folder
+# Format examples inside event_counts.json: "SomeFile.root\t821232" or "SomeFile.root: 821232"
+import re
+
+n_events = 0
+unique_providers_list = sorted(set([
+    "ele_from_geneles", "ele_from_genpromptphotons", "ele_from_jets",
+    "jets", "fake_jets_features", "fat_jets", "fsr_photons_from_muons",
+    "met", "muons", "muons_from_jets", "photon_from_geneles",
+    "photon_from_genpromptphotons", "photon_from_jets", "sv_from_genjets",
+    "sub_jets", "taus_with_GenVisTau", "taus_wo_GenVisTau"
+]))
+
+import json
+
+# Try to read event_counts.json from the provider folders first
+for provider in unique_providers_list:
+    p = os.path.join(parent_folder, provider)
+    json_path = os.path.join(p, "event_counts.json")
+    if os.path.isfile(json_path):
+        try:
+            with open(json_path, "r") as fh:
+                # Prefer parsing as JSON (expected format is a dict)
+                try:
+                    obj = json.load(fh)
+                    if isinstance(obj, dict) and len(obj) > 0:
+                        first_val = next(iter(obj.values()))
+                        n_events = int(first_val)
+                        break
+                except Exception:
+                    # Fallback to permissive text parsing
+                    fh.seek(0)
+                    text = fh.read()
+                    m = re.search(r"\.root\"?\s*[:\s]*([0-9]+)", text)
+                    if m:
+                        n_events = int(m.group(1))
+                        break
+        except Exception:
+            # if file unreadable, continue to next provider
+            pass
+
+print(f"Using n_events = {n_events} from event_counts.json")
+
+# n_events obtained from event_counts.json (no .npy fallback required)
+scale = 1
+
 # EXACT required variable order (kept as-is)
 ordered_vars = [
     "GenElectron_pt",
@@ -161,9 +207,7 @@ for name in unique_providers:
         dat = np.load(data_path)
         all_vars = cfg.get("conditioning_features", []) + cfg.get("target_features", [])
         var2col = {v: i for i, v in enumerate(all_vars)}
-        n_events = dat.shape[0] if getattr(dat, "ndim", 0) > 0 else 0
-        scale = 1e6 / n_events if n_events > 0 else 0.0
-        models[name] = {"path": p, "config": cfg, "data": dat, "var2col": var2col, "scale": scale, "n_events": n_events}
+        models[name] = {"path": p, "config": cfg, "data": dat, "var2col": var2col, "scale": scale}
     else:
         # mark as not available
         models[name] = None
@@ -294,11 +338,8 @@ for i, var in enumerate(ordered_vars):
 
     print()
 
-# Compute total events (take the maximum n_events across available provider files)
-total_events = max((m.get("n_events", 0) for m in models.values() if m), default=0)
-
-# Convert to millions and format (trim trailing zeros)
-n_m = total_events / 1e6 if total_events > 0 else 0.0
+# n_events already calculated from ROOT at the beginning
+n_m = n_events if n_events > 0 else 0.0
 n_m_str = f"{n_m:.2f}".rstrip('0').rstrip('.')
 
 print("\nResults (to be pasted on the spreadsheet):\n")
