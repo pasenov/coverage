@@ -4,7 +4,11 @@ import numpy as np
 import sys
 import os
 
-parent_folder = sys.argv[1]
+if len(sys.argv) < 2:
+    print("Usage: python3 info_v1.py <parent_folder1> [<parent_folder2> ...]")
+    sys.exit(1)
+
+parent_folders = sys.argv[1:]
 
 # Get n_events ONCE from an event_counts.json in any provider folder
 # Format examples inside event_counts.json: "SomeFile.root\t821232" or "SomeFile.root: 821232"
@@ -21,31 +25,31 @@ unique_providers_list = sorted(set([
 
 import json
 
-# Try to read event_counts.json from the provider folders first
-for provider in unique_providers_list:
-    p = os.path.join(parent_folder, provider)
-    json_path = os.path.join(p, "event_counts.json")
-    if os.path.isfile(json_path):
-        try:
-            with open(json_path, "r") as fh:
-                # Prefer parsing as JSON (expected format is a dict)
-                try:
-                    obj = json.load(fh)
-                    if isinstance(obj, dict) and len(obj) > 0:
-                        first_val = next(iter(obj.values()))
-                        n_events = int(first_val)
-                        break
-                except Exception:
-                    # Fallback to permissive text parsing
-                    fh.seek(0)
-                    text = fh.read()
-                    m = re.search(r"\.root\"?\s*[:\s]*([0-9]+)", text)
-                    if m:
-                        n_events = int(m.group(1))
-                        break
-        except Exception:
-            # if file unreadable, continue to next provider
-            pass
+def get_n_events_from_folder(parent_folder):
+    n_ev = 0
+    # Try to read event_counts.json from the provider folders first
+    for provider in unique_providers_list:
+        p = os.path.join(parent_folder, provider)
+        json_path = os.path.join(p, "event_counts.json")
+        if os.path.isfile(json_path):
+            try:
+                with open(json_path, "r") as fh:
+                    try:
+                        obj = json.load(fh)
+                        if isinstance(obj, dict) and len(obj) > 0:
+                            first_val = next(iter(obj.values()))
+                            n_ev = int(first_val)
+                            return n_ev
+                    except Exception:
+                        fh.seek(0)
+                        text = fh.read()
+                        m = re.search(r"\\.root\"?\s*[:\s]*([0-9]+)", text)
+                        if m:
+                            n_ev = int(m.group(1))
+                            return n_ev
+            except Exception:
+                pass
+    return n_ev
 
 print(f"Using n_events = {n_events} from event_counts.json")
 
@@ -195,22 +199,26 @@ providers = [
     "taus_wo_GenVisTau"                # UnmatchedJet_SV_mass
 ]
 
-# Preload only the folders we will consult (skip missing)
 unique_providers = sorted(set(providers))
-models = {}
-for name in unique_providers:
-    p = os.path.join(parent_folder, name)
-    cfg_path = os.path.join(p, "config.pkl")
-    data_path = os.path.join(p, "data.npy")
-    if os.path.isfile(cfg_path) and os.path.isfile(data_path):
-        cfg = pickle.load(open(cfg_path, "rb"))
-        dat = np.load(data_path)
-        all_vars = cfg.get("conditioning_features", []) + cfg.get("target_features", [])
-        var2col = {v: i for i, v in enumerate(all_vars)}
-        models[name] = {"path": p, "config": cfg, "data": dat, "var2col": var2col, "scale": scale}
-    else:
-        # mark as not available
-        models[name] = None
+
+def load_models_for_parent(parent_folder):
+    models_local = {}
+    for name in unique_providers:
+        p = os.path.join(parent_folder, name)
+        cfg_path = os.path.join(p, "config.pkl")
+        data_path = os.path.join(p, "data.npy")
+        if os.path.isfile(cfg_path) and os.path.isfile(data_path):
+            try:
+                cfg = pickle.load(open(cfg_path, "rb"))
+                dat = np.load(data_path)
+                all_vars = cfg.get("conditioning_features", []) + cfg.get("target_features", [])
+                var2col = {v: i for i, v in enumerate(all_vars)}
+                models_local[name] = {"path": p, "config": cfg, "data": dat, "var2col": var2col, "scale": scale}
+            except Exception:
+                models_local[name] = None
+        else:
+            models_local[name] = None
+    return models_local
 
 # Variable categories
 pt_mass_vars = {
@@ -250,16 +258,12 @@ dr_vars = {
 def count_range(arr, cond):
     return np.sum(cond(arr))
 
-print("\nVariables and ranges (parent: %s)\n" % parent_folder)
+print("\nVariables and ranges (parents: %s)\n" % ", ".join(parent_folders))
 print("====================================\n")
 
-spreadsheet_output = []
-
+# Build ranges per variable once, to ensure identical row ordering across parents
+ranges_per_var = []
 for i, var in enumerate(ordered_vars):
-    provider = providers[i]
-    model_info = models.get(provider)
-    print(f"=== {var} (from {provider}) ===")
-
     # determine ranges for this variable
     if var in pt_mass_vars:
         ranges = [
@@ -296,54 +300,114 @@ for i, var in enumerate(ordered_vars):
         ]
     else:
         ranges = []
+    ranges_per_var.append((var, providers[i], ranges))
 
-    if model_info is None:
-        # provider folder missing or missing files
-        if not ranges:
-            print(" Not found in the provided folder\n")
-            spreadsheet_output.append("Not found in the provided folder")
-        else:
+# Total number of rows
+rows = sum(len(rngs) for (_, _, rngs) in ranges_per_var)
+
+# For each parent folder, load models and compute column values
+all_columns = []
+parent_n_events = []
+for parent in parent_folders:
+    print(f"Processing parent: {parent}")
+    models = load_models_for_parent(parent)
+    n_events_local = get_n_events_from_folder(parent)
+    parent_n_events.append(n_events_local)
+    col_values = []
+    for var, provider, ranges in ranges_per_var:
+        model_info = models.get(provider)
+        if model_info is None:
+            # provider missing -> append zeros for each range
             for _ in ranges:
-                print(" Not found in the provided folder")
-                spreadsheet_output.append("Not found in the provided folder")
-        print()
-        continue
+                col_values.append(0)
+            continue
 
-    var2col = model_info["var2col"]
-    data = model_info["data"]
-    scale = model_info["scale"]
+        var2col = model_info["var2col"]
+        data = model_info["data"]
+        scale = model_info.get("scale", 1)
 
-    if var not in var2col:
-        if not ranges:
-            print(" Not found in the dataset in that folder\n")
-            spreadsheet_output.append("Not found in the dataset")
-        else:
+        if var not in var2col:
             for _ in ranges:
-                print(" Not found in the dataset")
-                spreadsheet_output.append("Not found in the dataset")
-        print()
-        continue
+                col_values.append(0)
+            continue
 
-    col = var2col[var]
-    x = data[:, col]
+        col = var2col[var]
+        x = data[:, col]
+        for _label, cond_func in ranges:
+            val = int(count_range(x, cond_func) * scale)
+            col_values.append(val)
 
-    if not ranges:
-        print()
-        continue
+    # if there were no ranges at all for any var, ensure empty list
+    all_columns.append(col_values)
 
-    for label, cond_func in ranges:
-        val = count_range(x, cond_func) * scale
-        print(f" {label:12}: {val:.2f}")
-        spreadsheet_output.append(f"{val:.2f}")
+# Print header showing n_events per parent (optional)
+print('\nn_events per parent:')
+for p, n in zip(parent_folders, parent_n_events):
+    print(f" {p}: {n}")
 
-    print()
+# Print tab-separated columns (rows x parents) with leading descriptive columns
+num_parents = len(parent_folders)
+if rows == 0:
+    print("No ranges defined; nothing to output.")
+else:
+    # Build descriptive left-hand columns
+    header = ["Object", "Source/Model", "Conditioning Variable", "Range"]
 
-# n_events already calculated from ROOT at the beginning
-n_m = n_events if n_events > 0 else 0.0
-n_m_str = f"{n_m:.2f}".rstrip('0').rstrip('.')
+    # map provider -> object name
+    provider_to_object = {
+        'ele_from_geneles': 'Electron',
+        'ele_from_genpromptphotons': 'Electron',
+        'ele_from_jets': 'Electron',
+        'jets': 'Jet',
+        'fake_jets_features': 'Jet',
+        'fat_jets': 'FatJet',
+        'fsr_photons_from_muons': 'FSRPhoton',
+        'met': 'MET',
+        'muons': 'Muon',
+        'muons_from_jets': 'Muon',
+        'photon_from_geneles': 'Photon',
+        'photon_from_genpromptphotons': 'Photon',
+        'photon_from_jets': 'Photon',
+        'sv_from_genjets': 'Secondary Vertex',
+        'sub_jets': 'Subjet',
+        'taus_with_GenVisTau': 'Tau',
+        'taus_wo_GenVisTau': 'Tau'
+    }
 
-print("\nResults (to be pasted on the spreadsheet):\n")
-print(n_m_str)
-for line in spreadsheet_output:
-    print(line)
+    # Prepare textual rows corresponding to ranges_per_var
+    text_rows = []
+    for var, provider, ranges in ranges_per_var:
+        # conditioning variable: drop the first token before the first underscore
+        cond = var.split('_', 1)[1] if '_' in var else var
+        obj = provider_to_object.get(provider, '')
+        for label, _cond in ranges:
+            text_rows.append([obj, provider, cond, label])
+
+    # Print to stdout (tab-separated), combining text and numeric columns
+    print("\nResults (tab-separated, with descriptive columns A-D):\n")
+    print("\t".join(header + list(parent_folders)))
+    for r in range(rows):
+        left = text_rows[r] if r < len(text_rows) else ["", "", "", ""]
+        nums = [str(all_columns[c][r] if r < len(all_columns[c]) else 0) for c in range(num_parents)]
+        print("\t".join(left + nums))
+
+    # Write CSV (comma-separated) with A-D columns and parents starting at E
+    out_csv = "output_info.csv"
+    try:
+        with open(out_csv, "w") as fh:
+            # header: A-D are labels, E+ are full input directories
+            fh.write(",".join(header + list(parent_folders)) + "\n")
+            for r in range(rows):
+                left = text_rows[r] if r < len(text_rows) else ["", "", "", ""]
+                nums = [str(all_columns[c][r] if r < len(all_columns[c]) else 0) for c in range(num_parents)]
+                fh.write(",".join(left + nums) + "\n")
+        print(f"\nWrote results to {out_csv}")
+    except Exception as e:
+        print(f"Failed to write {out_csv}: {e}")
+
+# Finished: print a short summary and per-parent n_events (if available)
+print("\nDone. Results written to output_info.csv (tabular counts).")
+print("n_events per parent (if available):")
+for p, n in zip(parent_folders, parent_n_events):
+    print(f" {p}: {n}")
 
